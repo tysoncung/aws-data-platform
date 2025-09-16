@@ -1,0 +1,63 @@
+# AWS CDK Core
+aws-cdk-lib==2.100.0
+constructs>=10.0.0,<11.0.0
+
+# AWS SDK
+boto3>=1.26.0
+botocore>=1.29.0
+
+# Data Processing
+pandas>=1.5.0
+numpy>=1.23.0
+pyarrow>=10.0.0
+fastparquet>=0.8.0
+
+# Spark & Big Data
+pyspark>=3.3.0
+pyathena>=2.24.0
+awswrangler>=2.19.0
+
+# Machine Learning
+scikit-learn>=1.2.0
+sagemaker>=2.121.0
+tensorflow>=2.11.0
+torch>=1.13.0
+
+# Stream Processing
+confluent-kafka>=1.9.0
+faust-streaming>=0.10.0
+
+# Database Connectivity
+psycopg2-binary>=2.9.0
+pymongo>=4.3.0
+redis>=4.4.0
+sqlalchemy>=1.4.0
+
+# API & Web
+fastapi>=0.88.0
+uvicorn>=0.20.0
+requests>=2.28.0
+
+# Utilities
+python-dotenv>=0.21.0
+pyyaml>=6.0
+click>=8.1.0
+rich>=13.0.0
+structlog>=22.3.0
+
+# Monitoring
+prometheus-client>=0.15.0
+opentelemetry-api>=1.15.0
+opentelemetry-sdk>=1.15.0
+
+# Data Quality
+great-expectations>=0.15.0
+soda-core>=3.0.0
+
+# Workflow
+apache-airflow>=2.5.0
+prefect>=2.7.0
+
+# Testing (also in requirements-dev.txt)
+pytest>=7.2.0
+moto>=4.0.0

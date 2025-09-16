@@ -1,0 +1,348 @@
+name: Deploy Data Platform
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      stack:
+        description: 'Stack to deploy (leave empty for all)'
+        required: false
+        type: choice
+        options:
+          - ''
+          - vpc
+          - streaming
+          - batch
+          - storage
+          - ml
+          - monitoring
+
+env:
+  AWS_REGION: us-east-1
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
+
+jobs:
+  validate:
+    name: Validate Infrastructure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          npm install -g aws-cdk
+
+      - name: Run linting
+        run: |
+          flake8 infrastructure/ src/ --max-line-length=120
+          black --check infrastructure/ src/
+          isort --check-only infrastructure/ src/
+
+      - name: Run security scan
+        run: |
+          bandit -r infrastructure/ src/ -ll
+          safety check
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v --cov=infrastructure --cov=src --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: true
+
+  cdk-diff:
+    name: CDK Diff
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm install -g aws-cdk
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set environment variables
+        run: |
+          cp .env.example .env.dev
+          export $(cat .env.dev | xargs)
+
+      - name: CDK Diff
+        run: |
+          cdk diff --all 2>&1 | tee cdk-diff.txt
+
+      - name: Comment PR with diff
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const diff = fs.readFileSync('cdk-diff.txt', 'utf8');
+            const truncated = diff.length > 65000 ? diff.substring(0, 65000) + '\n...(truncated)' : diff;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## CDK Diff Results\n\`\`\`\n${truncated}\n\`\`\``
+            });
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'dev'
+    environment:
+      name: dev
+      url: https://dev.dataplatform.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm install -g aws-cdk
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEV }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy infrastructure
+        env:
+          ENVIRONMENT: dev
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID_DEV }}
+        run: |
+          cp .env.example .env.dev
+
+          # Update with actual values
+          sed -i "s/AWS_ACCOUNT_ID=.*/AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID/" .env.dev
+          sed -i "s/ENVIRONMENT=.*/ENVIRONMENT=dev/" .env.dev
+          sed -i "s/NOTIFICATION_EMAIL=.*/NOTIFICATION_EMAIL=${{ secrets.NOTIFICATION_EMAIL }}/" .env.dev
+
+          # Deploy
+          if [ -z "${{ github.event.inputs.stack }}" ]; then
+            ./scripts/deploy.sh --all --environment dev
+          else
+            ./scripts/deploy.sh --stack ${{ github.event.inputs.stack }} --environment dev
+          fi
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v -m "not slow"
+
+      - name: Update documentation
+        run: |
+          python scripts/generate_docs.py
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.dataplatform.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm install -g aws-cdk
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy infrastructure
+        env:
+          ENVIRONMENT: staging
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID_STAGING }}
+        run: |
+          cp .env.example .env.staging
+
+          sed -i "s/AWS_ACCOUNT_ID=.*/AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID/" .env.staging
+          sed -i "s/ENVIRONMENT=.*/ENVIRONMENT=staging/" .env.staging
+          sed -i "s/NOTIFICATION_EMAIL=.*/NOTIFICATION_EMAIL=${{ secrets.NOTIFICATION_EMAIL }}/" .env.staging
+
+          if [ -z "${{ github.event.inputs.stack }}" ]; then
+            ./scripts/deploy.sh --all --environment staging
+          else
+            ./scripts/deploy.sh --stack ${{ github.event.inputs.stack }} --environment staging
+          fi
+
+      - name: Run smoke tests
+        run: |
+          pytest tests/smoke/ -v
+
+      - name: Performance testing
+        run: |
+          python scripts/load_test.py --environment staging --duration 300
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.event.inputs.environment == 'prod'
+    environment:
+      name: production
+      url: https://dataplatform.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm install -g aws-cdk
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create backup
+        run: |
+          ./scripts/backup.sh --environment prod
+
+      - name: Deploy infrastructure
+        env:
+          ENVIRONMENT: prod
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID_PROD }}
+        run: |
+          cp .env.example .env.prod
+
+          sed -i "s/AWS_ACCOUNT_ID=.*/AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID/" .env.prod
+          sed -i "s/ENVIRONMENT=.*/ENVIRONMENT=prod/" .env.prod
+          sed -i "s/NOTIFICATION_EMAIL=.*/NOTIFICATION_EMAIL=${{ secrets.NOTIFICATION_EMAIL }}/" .env.prod
+
+          if [ -z "${{ github.event.inputs.stack }}" ]; then
+            ./scripts/deploy.sh --all --environment prod
+          else
+            ./scripts/deploy.sh --stack ${{ github.event.inputs.stack }} --environment prod
+          fi
+
+      - name: Run smoke tests
+        run: |
+          pytest tests/smoke/ -v --environment prod
+
+      - name: Monitor deployment
+        run: |
+          python scripts/monitor_deployment.py --environment prod --duration 600
+
+      - name: Send deployment notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
