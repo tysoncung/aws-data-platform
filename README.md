@@ -100,7 +100,7 @@ NOTIFICATION_EMAIL=data-team@company.com
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Data Sources                             │
+│                         Data Sources                            │
 │  (Applications, IoT Devices, APIs, Databases, Files)            │
 └─────────────┬───────────────────────┬───────────────────────────┘
               │                       │
@@ -110,8 +110,8 @@ NOTIFICATION_EMAIL=data-team@company.com
 ├──────────────────────┤  ├────────────────────────┤
 │ • Kinesis Streams    │  │ • S3 Data Lake         │
 │ • Lambda Functions   │  │ • Glue ETL Jobs        │
-│ • DynamoDB          │  │ • EMR Clusters         │
-│ • Kinesis Analytics │  │ • Athena Queries       │
+│ • DynamoDB           │  │ • EMR Clusters         │
+│ • Kinesis Analytics  │  │ • Athena Queries       │
 └──────────┬───────────┘  └───────────┬────────────┘
            │                          │
            ▼                          ▼
@@ -125,16 +125,16 @@ NOTIFICATION_EMAIL=data-team@company.com
                       │
                       ▼
 ┌─────────────────────────────────────────────────┐
-│           Storage & Serving Layer                │
+│           Storage & Serving Layer               │
 ├─────────────────────────────────────────────────┤
-│ • Redshift (DW)     • DynamoDB (NoSQL)         │
-│ • S3 (Data Lake)    • ElasticSearch            │
-│ • Feature Store     • Time Series DB           │
+│ • Redshift (DW)     • DynamoDB (NoSQL)          │
+│ • S3 (Data Lake)    • ElasticSearch             │
+│ • Feature Store     • Time Series DB            │
 └─────────────────────┬───────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────┐
-│            Consumption Layer                     │
+│            Consumption Layer                    │
 ├─────────────────────────────────────────────────┤
 │ • QuickSight        • SageMaker                 │
 │ • API Gateway       • Custom Apps               │
