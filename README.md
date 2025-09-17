@@ -116,7 +116,7 @@ NOTIFICATION_EMAIL=data-team@company.com
            │                          │
            ▼                          ▼
 ┌─────────────────────────────────────────────────┐
-│              Processing & Analytics              │
+│              Processing & Analytics             │
 ├─────────────────────────────────────────────────┤
 │ • Spark Streaming    • Batch ETL                │
 │ • ML Feature Eng.   • Data Validation           │
@@ -170,23 +170,23 @@ pytest tests/integration/test_deployment.py
 
 ```
 aws-data-platform/
-├── infrastructure/           # CDK infrastructure code
-│   ├── stacks/              # CDK stack definitions
-│   │   ├── streaming/       # Real-time streaming stack
-│   │   ├── batch/          # Batch processing stack
-│   │   ├── storage/        # Data lake & warehouse stack
-│   │   ├── ml/            # Machine learning stack
-│   │   └── monitoring/     # Monitoring stack
-│   ├── constructs/         # Reusable CDK constructs
-│   └── configs/           # Environment configurations
-├── src/                   # Application source code
-│   ├── ingestion/        # Data ingestion modules
-│   ├── processing/       # Data processing logic
-│   ├── ml/              # ML pipelines and models
-│   └── orchestration/    # Workflow orchestration
-├── tests/               # Test suites
-├── scripts/            # Deployment and utility scripts
-└── docs/              # Documentation
+├── infrastructure/             # CDK infrastructure code
+│   ├── stacks/                 # CDK stack definitions
+│   │   ├── streaming/          # Real-time streaming stack
+│   │   ├── batch/              # Batch processing stack
+│   │   ├── storage/            # Data lake & warehouse stack
+│   │   ├── ml/                 # Machine learning stack
+│   │   └── monitoring/         # Monitoring stack
+│   ├── constructs/             # Reusable CDK constructs
+│   └── configs/                # Environment configurations
+├── src/                        # Application source code
+│   ├── ingestion/              # Data ingestion modules
+│   ├── processing/             # Data processing logic
+│   ├── ml/                     # ML pipelines and models
+│   └── orchestration/          # Workflow orchestration
+├── tests/                      # Test suites
+├── scripts/                    # Deployment and utility scripts
+└── docs/                       # Documentation
 ```
 
 ## 🔧 Customization Guide
